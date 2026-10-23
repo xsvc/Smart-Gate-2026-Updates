@@ -12,3 +12,8 @@ setup/drivers/build
 
 
 .idea
+
+# Node.js web app (src/web-app)
+node_modules/
+.env
+npm-debug.log*
