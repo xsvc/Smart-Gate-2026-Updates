@@ -2,6 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![python](https://img.shields.io/badge/Python-3.6-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![node.js](https://img.shields.io/badge/Node.js-24-5FA04E.svg?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![AIIA](https://img.shields.io/badge/AIIA-2025-purple.svg)](https://youtu.be/FwYv-16JMjo?si=IlkEh4MlS5sk0w-t)
 
 
@@ -28,6 +29,8 @@ Features include:
 - Utilizing TensorRT engine optimization to enhance inference performance. The optimized models are saved as `.engine` files within the `models/` folder. Models are obtained from the [Marsupial](https://github.com/carlosclaiton/marsupial) dataset.
 
 - Web server dashboard to view a live feed fetched from the camera as well as manually control state of the door.
+
+- SmartGate web app (Node.js, in `src/web-app/`) for managing gates, alerts, users and statistics, with optional live control of the Jetson gate (see the [Web App README](src/web-app/README.md)).
 
 ## Supported Hardware
 
@@ -308,13 +311,16 @@ Users are free to configure the rules to set the behaviour of the gate specified
     - `port` is the port number for which the web server would run under. In the example it's set to `8080`
 
 ### Web App
-- Run this on the host to setup the web app:
+- Run this on the host to setup the web app (Node.js, runs in Docker):
 
 ```sh
 cd ~/SmartGate/src/web-app
+cp .env.example .env   # then fill in the settings; use ENV=production on the nano
 sudo docker-compose up --build -d
 ```
 - Go to `http://localhost:8000` on the nano or `http://<nano-ipv4-address>:8000` to view the web-app 
+- To let the web app open/close the real gate and show the live camera, set
+  `JETSON_GATES=1=http://host.docker.internal:8080` in `.env` (see the [Web App README](src/web-app/README.md))
 
 `Note`: Running both the web app and the live detection on the nano may cause performance issues
 
