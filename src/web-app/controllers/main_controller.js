@@ -9,7 +9,6 @@ import {
     checkDbConnection,
     checkPermission,
     deleteAlerts,
-    getGates,
     getStats,
     insertUser,
     markUserLoggedIn,
@@ -24,13 +23,7 @@ import {
     broadcastUserOverview,
     kickUser,
 } from './websocket_events.js';
-import {
-    getJetsonGateNumbers,
-    getJetsonStatus,
-    getJetsonUrl,
-    openJetsonStream,
-    sendGateCommand,
-} from './jetson_controller.js';
+import { getLiveSnapshot, openLiveStream } from './jetson_live.js';
 
 const FRONTEND_DIR = path.join(import.meta.dirname, '..', 'frontend');
 const DUMMY_AVATAR_URL = 'https://cdn-icons-png.flaticon.com/512/1674/1674295.png';
@@ -38,7 +31,7 @@ const DUMMY_AVATAR_URL = 'https://cdn-icons-png.flaticon.com/512/1674/1674295.pn
 // Each page is frontend/layout.html with the page's HTML placed inside it
 const PAGES = [
     { url: '/', file: 'Index.html', title: 'Dashboard', page: 'dashboard' },
-    { url: '/gates', file: 'gates.html', title: 'Gates', page: 'gates' },
+    { url: '/gates', file: 'gates.html', title: 'Live Stream', page: 'live' },
     { url: '/alerts', file: 'alerts.html', title: 'Alerts', page: 'alerts' },
     { url: '/users', file: 'users.html', title: 'Users', page: 'users' },
     { url: '/stats', file: 'stats.html', title: 'Stats', page: 'stats' },
@@ -128,12 +121,6 @@ async function logIn(request, { id, login, avatarUrl }) {
 // -------------------
 const gateNoSchema = { type: 'integer', minimum: 1 };
 const gateStatusSchema = { type: 'string', enum: ['Open', 'Closed'] };
-
-const gateParamsSchema = {
-    type: 'object',
-    required: ['gateNo'],
-    properties: { gateNo: gateNoSchema },
-};
 
 // -------------
 // Routes
@@ -320,11 +307,6 @@ export async function rootRoutes(app) {
     });
 
     // --- Gates ---
-    app.get('/api/gates', async () => ({
-        gates: await getGates(),
-        jetson_gates: getJetsonGateNumbers(),
-    }));
-
     // Registers a gate if it is not in the database yet
     app.post('/add_gate_data', {
         schema: {
@@ -340,7 +322,7 @@ export async function rootRoutes(app) {
         return { message: `Gate ${gateNo} status ${gateStatus} added successfully` };
     });
 
-    // Opens or closes a gate
+    // Records a gate as opened or closed. This only updates the database; it never moves a physical gate.
     app.post('/update_gate_data', {
         schema: {
             body: {
@@ -361,20 +343,6 @@ export async function rootRoutes(app) {
             return reply.code(403).send({ message: `You don't have permission to ${action} the gate.` });
         }
 
-        // Move the real gate first, if this gate is linked to a Jetson
-        if (getJetsonUrl(gateNo)) {
-            try {
-                await sendGateCommand(gateNo, newStatus);
-            } catch (err) {
-                request.log.warn(`Gate ${gateNo} Jetson command failed: ${err.message}`);
-                await addAlert(`Gate #${gateNo} controller could not be reached`, 'critical');
-                await broadcastAlertData(io);
-                return reply.code(502).send({
-                    message: `Could not reach the controller for gate ${gateNo}, so the gate was not moved.`,
-                });
-            }
-        }
-
         const { gate, changed } = await updateGateStatus(gateNo, newStatus);
         if (changed) {
             await addAlert(`Gate #${gateNo} ${newStatus === 'Open' ? 'Opened' : 'Closed'} by ${user.username}`, 'info');
@@ -384,35 +352,21 @@ export async function rootRoutes(app) {
         return { message: `Gate ${gateNo} status ${newStatus} updated successfully`, gate };
     });
 
-    app.get('/api/gates/:gateNo/status', { schema: { params: gateParamsSchema } }, async (request, reply) => {
-        const { gateNo } = request.params;
-        if (!getJetsonUrl(gateNo)) {
-            return reply.code(404).send({ error: 'This gate is not linked to a Jetson.' });
-        }
-        try {
-            return await getJetsonStatus(gateNo);
-        } catch (err) {
-            request.log.warn(`Gate ${gateNo} Jetson status failed: ${err.message}`);
-            return reply.code(502).send({ error: 'The gate controller could not be reached.' });
-        }
-    });
+    // --- Live monitoring (Jetson) ---
+    // Latest connection state, readings and detection, as sent to the Live Stream page
+    app.get('/api/live/status', async () => getLiveSnapshot());
 
-    // Passes the Jetson's live camera stream through to the browser
-    app.get('/api/gates/:gateNo/stream', { schema: { params: gateParamsSchema } }, async (request, reply) => {
-        const { gateNo } = request.params;
-        if (!getJetsonUrl(gateNo)) {
-            return reply.code(404).send({ error: 'This gate is not linked to a Jetson.' });
-        }
-
+    // Passes the Jetson's live MJPEG camera stream through to the browser
+    app.get('/api/live/stream', async (request, reply) => {
         const browserGone = new AbortController();
         reply.raw.on('close', () => browserGone.abort());
 
         let response;
         try {
-            response = await openJetsonStream(gateNo, browserGone.signal);
+            response = await openLiveStream(browserGone.signal);
         } catch (err) {
-            request.log.warn(`Gate ${gateNo} Jetson stream failed: ${err.message}`);
-            return reply.code(502).send({ error: 'The gate camera could not be reached.' });
+            request.log.warn(`Live stream unavailable: ${err.message}`);
+            return reply.code(502).send({ error: 'The Jetson camera stream could not be reached.' });
         }
 
         const stream = Readable.fromWeb(response.body);

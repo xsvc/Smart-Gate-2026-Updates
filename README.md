@@ -309,6 +309,9 @@ Users are free to configure the rules to set the behaviour of the gate specified
 
 - `server` section contains the settings for the web server
     - `port` is the port number for which the web server would run under. In the example it's set to `8080`
+    - `live_port` is the port of the live monitoring service used by the website's LIVE STREAM page
+      (camera stream, detections, system and sensor readings). In the example it's set to `8081`; remove it
+      to turn the service off. See [docs/LIVE_MONITORING.md](docs/LIVE_MONITORING.md)
 
 ### Web App
 - Run this on the host to setup the web app (Node.js, runs in Docker):
@@ -319,8 +322,8 @@ cp .env.example .env   # then fill in the settings; use ENV=production on the na
 sudo docker-compose up --build -d
 ```
 - Go to `http://localhost:8000` on the nano or `http://<nano-ipv4-address>:8000` to view the web-app 
-- To let the web app open/close the real gate and show the live camera, set
-  `JETSON_GATES=1=http://host.docker.internal:8080` in `.env` (see the [Web App README](src/web-app/README.md))
+- To show the Jetson's live camera, detections and sensor readings on the LIVE STREAM page, set
+  `JETSON_LIVE_URL=http://host.docker.internal:8081` in `.env` (see [docs/LIVE_MONITORING.md](docs/LIVE_MONITORING.md))
 
 `Note`: Running both the web app and the live detection on the nano may cause performance issues
 

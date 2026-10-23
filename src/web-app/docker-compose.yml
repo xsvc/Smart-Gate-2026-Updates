@@ -15,11 +15,11 @@ services:
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
       - ADMIN_USERS=${ADMIN_USERS:-}
-      - JETSON_GATES=${JETSON_GATES:-}
+      - JETSON_LIVE_URL=${JETSON_LIVE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
-    # Lets the container reach a Jetson service on this same machine (see JETSON_GATES)
+    # Lets the container reach a Jetson service on this same machine (see JETSON_LIVE_URL)
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Pages, CSS and browser JS are shared with the container, so edits show on refresh.
