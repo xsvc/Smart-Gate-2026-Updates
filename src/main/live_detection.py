@@ -13,10 +13,24 @@ from http_server import Initialize_Server, Shutdown_Server, set_latest_frame, se
 from ruleset_decider import RulesetDecider
 from gate_states import State
 from json_config import JsonConfig
+from camera_reader import CameraReader
 
 import signal
 import sys
 import time
+
+#Live monitoring for the website (live_api.py) needs FastAPI. Without it, SmartGate still runs normally.
+try:
+    from live_api import start_live_api, stop_live_api, publish_detections
+except ImportError as e:
+    print(f'[!] Live monitoring disabled ({e})')
+    start_live_api = lambda *args: None
+    stop_live_api = lambda server: None
+    publish_detections = lambda *args: None
+
+#Set in main(); module-level so cleanup() can release them
+camera = None
+live_server = None
 
 def gstreamer_pipeline(
     capture_width=1280,
@@ -40,8 +54,11 @@ def gstreamer_pipeline(
 def cleanup():
     print("[+] Cleaning up resources...")
     io.all_pins_off()
+    stop_live_api(live_server)
     GPIO.cleanup()
     Shutdown_Server(web_server)
+    if camera is not None:
+        camera.release()
 
 def signal_handler(sig, frame):
     print('[+] Ctrl+C Detected... Exiting...')
@@ -50,7 +67,7 @@ def signal_handler(sig, frame):
 
 def main():
     #Global HTTP server for resource allocation and deallocation
-    global web_server
+    global web_server, camera, live_server
 
     #Set up signal handler keyboard interrupt / termination (e.g. systemctl stop/restart, docker stop)
     signal.signal(signal.SIGINT, signal_handler)
@@ -100,7 +117,11 @@ def main():
         "videoconvert ! "
         "video/x-raw, format=(string)BGR ! appsink"
     )
-    cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
+    #Frames are read continuously on a background thread so the live stream keeps updating
+    camera = CameraReader(lambda: cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER))
+
+    #Start the live monitoring service for the website (camera stream, detections, sensors)
+    live_server = start_live_api(server_config, camera, door_controller, io.get_val, model_config)
 
     #Our main loop
     while True:
@@ -134,7 +155,7 @@ def main():
         #------------DETECT State ----------------------------------------------------------
         elif current_state == State.DETECT:
             print("Detecting objects.")
-            ret_val, img = cap.read()
+            ret_val, img = camera.read()
             if not ret_val:
                 break
 
@@ -146,6 +167,9 @@ def main():
 
             #Update the latest_frame for streaming
             set_latest_frame(img.copy())
+
+            #Send the detected animals to the website
+            publish_detections(detections, t, img)
 
             object_list = [obj['class'] for obj in detections]
             current_state = State.DECISION

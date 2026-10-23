@@ -27,19 +27,18 @@ function getAdminUsers() {
         .filter(Boolean);
 }
 
-// Optional link from gate numbers to the Jetson that controls them,
-// e.g. JETSON_GATES=1=http://192.168.1.50:8080,2=http://192.168.1.51:8080
-function getJetsonGates() {
-    const gates = new Map();
-    for (const entry of (env.JETSON_GATES ?? '').split(',')) {
-        if (!entry.trim()) continue;
-        const [gateNo, url] = entry.split('=').map(part => part.trim());
-        if (!Number.isInteger(Number(gateNo)) || !url) {
-            throw new Error(`Invalid JETSON_GATES entry "${entry}". Expected <gate number>=<url>.`);
-        }
-        gates.set(Number(gateNo), url.replace(/\/+$/, ''));
+// Address of the Jetson's live monitoring service (src/main/live_api.py),
+// e.g. JETSON_LIVE_URL=http://192.168.1.50:8081
+function getJetsonLiveUrl() {
+    const value = (env.JETSON_LIVE_URL ?? '').trim();
+    if (!value) {
+        return null;
     }
-    return gates;
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        throw new Error(`JETSON_LIVE_URL must start with http:// or https:// (got "${value}").`);
+    }
+    return url.origin + url.pathname.replace(/\/+$/, '');
 }
 
 const config = {
@@ -52,7 +51,7 @@ const config = {
         clientSecret: env.GITHUB_CLIENT_SECRET,
     },
     adminUsers: getAdminUsers(),
-    jetsonGates: getJetsonGates(),
+    jetsonLiveUrl: getJetsonLiveUrl(),
 };
 
 export default config;

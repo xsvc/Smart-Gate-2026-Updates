@@ -6,6 +6,7 @@ import fastifyStatic from '@fastify/static';
 import { Server } from 'socket.io';
 import config from './controllers/config.js';
 import { clearAllUsers, closeDb } from './controllers/db_controller.js';
+import { startJetsonLive, stopJetsonLive } from './controllers/jetson_live.js';
 import { rootRoutes } from './controllers/main_controller.js';
 import { registerSocketEvents } from './controllers/websocket_events.js';
 
@@ -47,6 +48,7 @@ app.setErrorHandler((err, request, reply) => {
 await app.register(rootRoutes);
 
 app.addHook('preClose', async () => {
+    stopJetsonLive();
     io.disconnectSockets(true);
 });
 app.addHook('onClose', async () => {
@@ -70,3 +72,6 @@ try {
 }
 
 await app.listen({ host: '0.0.0.0', port: config.port });
+
+// Connect to the Jetson's live monitoring service (camera, detections, sensors)
+startJetsonLive(io, app.log);

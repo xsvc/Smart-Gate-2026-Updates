@@ -72,6 +72,13 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     jetson-stats \
     Jetson.GPIO
 
+# Live monitoring service for the SmartGate website (src/main/live_api.py).
+# FastAPI and uvicorn are pure Python; websockets ships ARM64 wheels (with a pure-Python fallback).
+RUN pip3 install --no-cache-dir --break-system-packages \
+    fastapi==0.161.1 \
+    uvicorn==0.54.0 \
+    websockets==17.3
+
 # Remove CUDA forward-compatibility libs — not needed since container CUDA matches
 # the host driver exactly, and their presence triggers a known panic in
 # nvidia-container-toolkit 1.19.1's ELF-parsing hook on this JetPack 7.2 setup.

@@ -69,7 +69,7 @@ Add `--volumes` to also delete the database. It is recreated with the sample dat
 | `SESSION_SECRET` | Signs the login cookie. At least 32 random characters. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub login. Create an OAuth app at <https://github.com/settings/developers> with the callback URL `http://<host>:8000/auth`. |
 | `ADMIN_USERS` | Comma-separated GitHub usernames that become admins when they log in. Add `Dummy` to make the dummy login an admin while testing. |
-| `JETSON_GATES` | Optional. Links gates to the Jetson that controls them, e.g. `1=http://192.168.1.50:8080`. |
+| `JETSON_LIVE_URL` | Address of the Jetson's live monitoring service for the **LIVE STREAM** page, e.g. `http://<jetson-ip>:8081`. |
 
 ## Roles and permissions
 
@@ -77,23 +77,22 @@ Everyone can view the pages. Actions are checked by the server:
 
 | Action | Needs |
 |---|---|
-| Open / close a gate | `open_gate` / `close_gate` (admin) |
+| Record a gate as opened / closed (`POST /update_gate_data`, database only) | `open_gate` / `close_gate` (admin) |
 | Change a user's role, remove a user, remove alerts | `data_control` (admin) |
 | Hide alerts | Nothing (only hides them in your own browser) |
 
 New users get the `user` role. Admins change roles by clicking a user on the **Users** page.
+The website never moves a physical gate; the Jetson decides that from its detection rules.
 
-## Linking a Jetson (real gates)
+## Live Stream page (Jetson)
 
-Without `JETSON_GATES`, opening and closing a gate is only recorded in the database.
-With it, the web app uses the Jetson's own web server (`src/main/http_server.py`, port 8080 from
-`config/config.json`). No Python code needs changing:
+The **LIVE STREAM** page (`/gates`) shows the Jetson's live camera, its connection state, the latest
+animal detection, CPU / memory / temperature, and the PIR, Hall-sensor and gate-position readings,
+updating in real time. Set `JETSON_LIVE_URL` to the Jetson's live service (`live_port` in
+`config/config.json`, 8081 by default). Values the Jetson does not provide show as **Unavailable**.
 
-- **OPEN/CLOSE** sends `OPEN_DOOR` / `CLOSE_DOOR` to the Jetson. If the Jetson can't be reached, the
-  gate is not changed and a critical alert is added.
-- The gate's card shows the Jetson's **live camera** (`/stream`) and its **door state and CPU** (`/status`).
-
-If the web app runs in Docker on the same Jetson, use `JETSON_GATES=1=http://host.docker.internal:8080`.
+If the web app runs in Docker on the same Jetson, use `JETSON_LIVE_URL=http://host.docker.internal:8081`.
+Setup, message formats, connection states and reconnection behaviour: [docs/LIVE_MONITORING.md](../../docs/LIVE_MONITORING.md).
 
 ## SmartGate Web App Commands
 
@@ -126,9 +125,9 @@ Database Password: smartgate (see `docker-compose.yml`)
 |---|---|
 | `app.js` | Starts the server: static files, sessions, Socket.IO, routes |
 | `controllers/main_controller.js` | Pages, login, and the HTTP API |
-| `controllers/websocket_events.js` | Socket.IO live updates (alerts, users, gates) |
+| `controllers/websocket_events.js` | Socket.IO live updates (alerts, users, live stream) |
 | `controllers/db_controller.js` | All database queries |
-| `controllers/jetson_controller.js` | Optional link to the Jetson gate controller |
+| `controllers/jetson_live.js` | Connection to the Jetson's live monitoring service |
 | `controllers/config.js` | Reads the `.env` settings |
 | `frontend/` | HTML pages. `layout.html` is the shared header and footer. |
 | `wwwroot/` | CSS, browser JavaScript, images and video, served under `/static/` |

@@ -6,6 +6,7 @@ import {
     getUserOverview,
     userExists,
 } from './db_controller.js';
+import { LIVE_ROOM, getLiveSnapshot } from './jetson_live.js';
 
 // ---------------------------------
 // Data sent to the browsers
@@ -79,6 +80,17 @@ export function registerSocketEvents(app, io) {
 
         handle('alert_data', async () => {
             socket.emit('alert_data', await fetchAlertsData());
+        });
+
+        // The Live Stream page joins the "live" room and gets the current Jetson state straight away
+        handle('live_subscribe', async () => {
+            socket.join(LIVE_ROOM);
+            const { connection, status, detection } = getLiveSnapshot();
+            socket.emit('live_connection', connection);
+            socket.emit('live_status', status);
+            if (detection) {
+                socket.emit('live_detection', detection);
+            }
         });
 
         handle('change_role', async ({ username, role }) => {
